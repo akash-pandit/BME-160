@@ -4,6 +4,62 @@
 
 from numpy import inf  # used in ProteinParam.pI()
 
+"""
+This program defines a class ProteinParam which is built around a string of amino acids represented as single characters.
+Many operations can be performed on these, as listed by the below methods
+
+self.aaCount() - find the number of amino acids in the input string.
+
+self.pI() - finds the isoelectric point, the pH value where the protein is most electrically neutral.
+
+self.aaComposition() - returns a dictionary mapping each unique amino acid in the protein to its count.
+
+self._charge_(pH) - an internal method that calculates the total electric charge of the protein at a specific pH.
+
+self.molarExtinction(oxidizing) - calculates the molar extinction coefficient for the protein. In an oxidizing environment, 
+    cysteine is left out of the calculations as its present in cystine residues which do not contribute. In a reducing 
+    environment, this does not occur and cysteine remains in the molar extinction coefficient calculations.
+
+self.massExtinction(oxidizing) - divides the molar extinction value from self.molarExtinction by the molar mass to get the
+    protein's mass extinction value. The oxidizing parameter value is passed to self.molarExtinction().
+
+self.molecularWeight() - calculates the molecular weight of the protein.
+
+SAMPLE INPUT:
+VLSPADKTNVKAAW
+
+SAMPLE OUTPUT:
+Number of Amino Acids: 14
+Molecular Weight: 1499.7
+molar Extinction coefficient: 5500.00
+mass Extinction coefficient: 3.67
+Theoretical pI: 9.88
+Amino acid composition:
+A = 21.43%
+C = 0.00%
+D = 7.14%
+E = 0.00%
+F = 0.00%
+G = 0.00%
+H = 0.00%
+I = 0.00%
+K = 14.29%
+L = 7.14%
+M = 0.00%
+N = 7.14%
+P = 7.14%
+Q = 0.00%
+R = 0.00%
+S = 7.14%
+T = 7.14%
+V = 14.29%
+W = 7.14%
+Y = 0.00%
+
+This program also includes a driver function main() to build a ProteinParam object and output
+the results of the object's methods.
+"""
+
 class ProteinParam:
     """class containing multiple data tables and methods for parsing strings of amino acids in their single character form"""
 # These tables are for calculating:
@@ -36,7 +92,7 @@ class ProteinParam:
         """constructor for ProteinParam, initializes the input protein and its composition in a dict"""
         self.protein = ''.join([aa for aa in protein if aa in self.aa2mw.keys()]).upper()
         # defines the protein as the input string with all erroneous characters removed
-        self.aaComposition_ = {aa : self.protein.count(aa) for aa in self.protein}
+        self.aaComposition_ = {aa : self.protein.count(aa) for aa in self.aa2mw}
         # generates dict of key:value pairs in aa2mw if those keys are in proteins
 
     def aaCount(self) -> int:
@@ -44,15 +100,17 @@ class ProteinParam:
         return len(self.protein)
 
     def pI (self):
-        """finds the isoelectric value for a given pH"""
+        """finds the isoelectric value for a given pH. """
         isoelectric = inf
-        for pH in range(0, 1400):
+        for pH in range(0, 1401):
             pH /= 100  # brings it down to the scale of 0.00 to 14.00
             newCharge = abs(self._charge_(pH))  # we want closest to 0, so measure distance from 0 with abs()
             if newCharge < isoelectric: 
                 isoelectric = newCharge
-        
-        return isoelectric
+                return_pH = pH
+        if return_pH:
+            return return_pH
+        raise AttributeError("For some reason, return_pH was never executed. Investigate this.")
 
     def aaComposition(self) -> dict:
         """returns a dictionary of the amino acid composition of the protein with 1 letter shortened amino acids as keys
@@ -62,34 +120,35 @@ class ProteinParam:
     def _charge_ (self, pH):
         """Implements the equation to calculate the net charge on an amino acid"""
         posCharge, negCharge = 0, 0
+
+        for aa,pKa in self.aa2chargePos.items(): # Calculate positive charge
+            posCharge += self.aaComposition_[aa] * (10**pKa) / (10**pKa + 10**pH)
+            
+        for aa,pKa in self.aa2chargeNeg.items(): # Calculate negative charge
+            negCharge += self.aaComposition_[aa] * (10**pH) / (10**pKa + 10**pH)
         
-        for aa in self.protein:  # loop through every protein
-            if aa in self.aa2chargePos.keys():
-                posCharge += (10 ** self.aa2chargePos[aa]) / (10 ** self.aa2chargePos[aa] + 10 ** pH)  
-                # increment by value of summation equation using charge of the current amino acid
-                
-            elif aa in self.aa2chargeNeg.keys():
-                negCharge += (10 ** self.aa2chargeNeg[aa]) / (10 ** self.aa2chargeNeg[aa] + 10 ** pH)
-                # increment by value of summation equation using charge of the current amino acid
+        posCharge += 10**self.aaNterm / (10**self.aaNterm + 10**pH) # increments n terminus charge
+        negCharge += 10**pH / (10**self.aaCterm + 10**pH) # increments c terminus charge
+        
+        return posCharge - negCharge # returns net charge
 
-        posCharge += (10 ** self.aaNterm) / (10 ** self.aaNterm + 10 ** pH)  # add n terminus charge to positive charge
-        negCharge += (10 ** self.aaCterm) / (10 ** self.aaCterm + 10 ** pH)  # add c terminus charge to negative charge
 
-        return posCharge - negCharge  # neutral charge
-
-    def molarExtinction(self, cysteine=True) -> float:
+    def molarExtinction(self, oxidizing=True) -> float:
         """Implements the molar extinction equation, with a base True case to account for oxidative conditions and if false, reductive conditions"""
-        if cysteine:
-            # executes for oxidizing conditions
-            e = self.protein.count('Y') * self.aa2abs280['Y'] + self.protein.count('W') * self.aa2abs280['W'] + self.protein.count('C') + self.aa2abs280['C']
-            return e
-        else:  # executes for reducing conditions where cytesine wouldn't affect molar extinction
-            return self.protein.count('Y') * self.aa2abs280['Y'] + self.protein.count('W') * self.aa2abs280['W']
+        molarExt = 0
+        for aa in self.aa2abs280.keys():
+            if oxidizing and aa != 'C':
+                molarExt += self.aaComposition()[aa] * self.aa2abs280[aa]
+            elif not oxidizing:
+                molarExt += self.aaComposition()[aa] * self.aa2abs280[aa]
 
-    def massExtinction(self, cysteine=True) -> float:
+        return molarExt
+
+
+    def massExtinction(self, oxidizing=True) -> float:
         """divides the molar extinction by molecular weight to get the mass extinction"""
-        myMW =  self.molecularWeight()
-        return self.molarExtinction(cysteine=cysteine) / myMW if myMW else 0.0
+        myMW = self.molecularWeight()
+        return self.molarExtinction(oxidizing=oxidizing) / myMW if myMW else 0.0
 
     def molecularWeight(self) -> float:
         """
@@ -109,6 +168,7 @@ def main():
     while inString :
         myParamMaker = ProteinParam(inString)
         myAAnumber = myParamMaker.aaCount()
+
         print ("Number of Amino Acids: {aaNum}".format(aaNum = myAAnumber))
         print ("Molecular Weight: {:.1f}".format(myParamMaker.molecularWeight()))
         print ("molar Extinction coefficient: {:.2f}".format(myParamMaker.molarExtinction()))
