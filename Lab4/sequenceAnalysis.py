@@ -231,13 +231,13 @@ def main(fileName=None):
     codonComp = myNuc.codonComposition()
     nucs = [(codon, myNuc.rnaCodonTable[codon], codonComp[codon]/aaComp[myNuc.rnaCodonTable[codon]])
             for codon in codonComp.keys()]
-    nucs.sort(key=lambda x: x[0])
-    nucs.sort(key=lambda x: x[1])
+    nucs.sort(key=lambda x: x[0])  # first sort by codons
+    nucs.sort(key=lambda x: x[1])  # then sort by amino acids
+    # amino acid sorting will override codon sorting, but for lines with same aa, codon sorting will remain
 
     # calculate sequence length and gc usage
     seqLen = myNuc.nucCount() / 1000000  # 1e6 bytes / Mb
     gcUsage = (myNuc.nucComposition()['G'] + myNuc.nucComposition()['C']) / myNuc.nucCount()
-    print(round(gcUsage*100, 1), round(seqLen, 2))
 
     # write everything to output
     with open('output.out', 'w') as out:
@@ -249,6 +249,9 @@ def main(fileName=None):
         for nucI in nucs:
             codon, aa, val = nucI[0], nucI[1], nucI[2]
             out.write(f'{codon} : {aa} {val*100:5.1f} ({codonComp[codon]:6d})\n')
+
+    # NOTE: as this is supposed to be incorporated into my "personal package", output only printed to file, 
+    # not stdout
 
 
 if __name__ == "__main__":
