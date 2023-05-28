@@ -255,4 +255,4 @@ def main(fileName=None):
 
 
 if __name__ == "__main__":
-    main()  # no param = use stdin
+    main("testGenome.fa")  # no param = use stdin
