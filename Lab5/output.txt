@@ -1,0 +1,1 @@
+Namespace(longestGene=True, minGene=300, start=['ATG'], stop=['TAG', 'TGA', 'TAA'])
